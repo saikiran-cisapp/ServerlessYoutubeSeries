@@ -7,33 +7,36 @@ const tableName = process.env.tableName;
 exports.handler = async event => {
     console.log('event', event);
 
-    const { connectionId: connectionID } = event.requestContext;
-
-    const body = JSON.parse(event.body);
-
     try {
+        let messages, domainName, stage;
+        const { connectionId: connectionID } = event.requestContext;
+    
+        const body = JSON.parse(event.body);
         const record = await Dynamo.get(connectionID, tableName);
-        const { messages, domainName, stage } = record;
+        console.log('record->', record);
 
-        messages.push(body.message);
+        record.map(async (singleRecord) => {
 
-        const data = {
-            ...record,
-            messages,
-        };
-
-        await Dynamo.write(data, tableName);
-
-        await WebSocket.send({
-            domainName,
-            stage,
-            connectionID,
-            message: 'This is a reply to your message',
+            messages = singleRecord.messages;
+            domainName = singleRecord.domainName;
+            stage = singleRecord.stage;
+            console.log(singleRecord);
+            await WebSocket.send({
+                domainName,
+                stage,
+                connectionID: singleRecord.ID,
+                message: body.message,
+            });
         });
+
+        // WebSocket.send({});
         console.log('sent message');
+        console.log(body.message);
 
         return Responses._200({ message: 'got a message' });
     } catch (error) {
+        console.log('error');
+        console.error(error);
         return Responses._400({ message: 'message could not be received' });
     }
 
